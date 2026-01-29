@@ -86,9 +86,15 @@ const logRunner = (message) => {
 };
 
 const runNode = () => {
+  // Suppress warnings and deprecation messages
+  const nodeEnv = {
+    ...env,
+    NODE_OPTIONS: `${env.NODE_OPTIONS || ""} --no-warnings`.trim(),
+    NODE_NO_WARNINGS: "1",
+  };
   const nodeProcess = spawn(process.execPath, ["moltbot.mjs", ...args], {
     cwd,
-    env,
+    env: nodeEnv,
     stdio: "inherit",
   });
 

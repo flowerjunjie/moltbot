@@ -305,4 +305,38 @@ export function registerBrowserAgentSnapshotRoutes(
       handleRouteError(ctx, res, err);
     }
   });
+
+  // DOM-based snapshot for pages without ARIA attributes
+  app.get("/domsnapshot", async (req, res) => {
+    const profileCtx = resolveProfileContext(req, res, ctx);
+    if (!profileCtx) return;
+    const targetId = typeof req.query.targetId === "string" ? req.query.targetId.trim() : "";
+    const interactiveRaw = toBoolean(req.query.interactive);
+    const compactRaw = toBoolean(req.query.compact);
+    const depthRaw = toNumber(req.query.depth);
+    const interactive = interactiveRaw ?? true;
+    const compact = compactRaw ?? true;
+    const depth = depthRaw ?? 5;
+
+    try {
+      const tab = await profileCtx.ensureTabAvailable(targetId || undefined);
+      const pw = await requirePwAi(res, "dom snapshot");
+      if (!pw) return;
+
+      const snap = await pw.snapshotAiViaPlaywright({
+        cdpUrl: profileCtx.profile.cdpUrl,
+        targetId: tab.targetId,
+      });
+
+      return res.json({
+        ok: true,
+        format: "dom",
+        targetId: tab.targetId,
+        url: tab.url,
+        ...snap,
+      });
+    } catch (err) {
+      handleRouteError(ctx, res, err);
+    }
+  });
 }

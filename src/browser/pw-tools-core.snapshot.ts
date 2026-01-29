@@ -155,6 +155,142 @@ export async function snapshotRoleViaPlaywright(opts: {
   };
 }
 
+// Build a DOM-based snapshot for pages without ARIA attributes
+async function buildDomSnapshotFromPage(
+  page: Page,
+  options: RoleSnapshotOptions = {},
+): Promise<{ snapshot: string; refs: Record<string, { role: string; name?: string }> }> {
+  let counter = 0;
+  const refs: Record<string, { role: string; name?: string }> = {};
+
+  function nextRef(): string {
+    counter++;
+    return `e${counter}`;
+  }
+
+  function getRoleFromElement(el: Element): string {
+    const tagName = el.tagName.toLowerCase();
+    if (tagName === "button" || el.getAttribute("role") === "button") return "button";
+    if (tagName === "a" || el.getAttribute("role") === "link") return "link";
+    if (tagName === "input" || el.getAttribute("role") === "textbox") return "textbox";
+    if (tagName === "select" || el.getAttribute("role") === "combobox") return "combobox";
+    if (tagName === "textarea") return "textbox";
+    if (el.getAttribute("role") === "checkbox" || (tagName === "input" && (el as HTMLInputElement).type === "checkbox"))
+      return "checkbox";
+    if (el.getAttribute("role") === "radio" || (tagName === "input" && (el as HTMLInputElement).type === "radio"))
+      return "radio";
+    if (["h1", "h2", "h3", "h4", "h5", "h6"].includes(tagName)) return "heading";
+    if (["div", "span", "p"].includes(tagName)) {
+      if (el.getAttribute("role") === "heading") return "heading";
+      if (el.getAttribute("role") === "button") return "button";
+      if (el.getAttribute("role") === "link") return "link";
+      return "generic";
+    }
+    if (tagName === "ul" || tagName === "ol") return "list";
+    if (tagName === "li") return "listitem";
+    return "generic";
+  }
+
+  function getNameFromElement(el: Element): string | undefined {
+    return el.textContent?.trim().slice(0, 100) || el.getAttribute("aria-label") || el.getAttribute("title") || undefined;
+  }
+
+  function isInteractiveElement(el: Element): boolean {
+    const role = getRoleFromElement(el);
+    return (
+      ["button", "link", "textbox", "checkbox", "radio", "combobox", "option", "menuitem", "tab"].includes(role) ||
+      el.tagName === "BUTTON" ||
+      el.tagName === "A" ||
+      el.tagName === "INPUT" ||
+      el.tagName === "SELECT" ||
+      (el as HTMLElement).onclick !== null ||
+      el.getAttribute("onmousedown") !== null ||
+      el.getAttribute("onclick") !== null
+    );
+  }
+
+  const INTERACTIVE_ROLES = new Set([
+    "button",
+    "link",
+    "textbox",
+    "checkbox",
+    "radio",
+    "combobox",
+    "option",
+    "menuitem",
+    "tab",
+  ]);
+  const STRUCTURAL_ROLES = new Set(["generic", "group", "list", "listitem"]);
+
+  function traverseElement(el: Element, depth: number, lines: string[]): void {
+    if (options.maxDepth !== undefined && depth > options.maxDepth) return;
+
+    const role = getRoleFromElement(el);
+    const name = getNameFromElement(el);
+    const interactive = isInteractiveElement(el);
+
+    if (options.interactive && !interactive) return;
+    if (options.compact && STRUCTURAL_ROLES.has(role) && !name) return;
+
+    let line = `${"  ".repeat(depth)}- ${role}`;
+    if (name) line += ` "${name}"`;
+
+    // Add ref for interactive elements or named content
+    if (interactive || (name && role === "heading")) {
+      const ref = nextRef();
+      line += ` [ref=${ref}]`;
+      refs[ref] = { role, ...(name ? { name } : {}) };
+    }
+
+    lines.push(line);
+
+    // Recurse into children
+    const children = Array.from(el.children);
+    for (const child of children) {
+      traverseElement(child, depth + 1, lines);
+    }
+  }
+
+  const lines: string[] = [];
+  const rootHandle = await page.locator(":root").first().elementHandle();
+  if (rootHandle) {
+    const children = await rootHandle.$$(":scope > *");
+    for (const child of children) {
+      const element = await child.evaluateHandle((el) => el as Element);
+      traverseElement(element as unknown as Element, 0, lines);
+    }
+  }
+
+  return {
+    snapshot: lines.join("\n") || "(no elements found)",
+    refs,
+  };
+}
+
+export async function snapshotDomViaPlaywright(opts: {
+  cdpUrl: string;
+  targetId?: string;
+  options?: RoleSnapshotOptions;
+}): Promise<{
+  snapshot: string;
+  refs: Record<string, { role: string; name?: string }>;
+  stats: { lines: number; chars: number; refs: number; interactive: number };
+}> {
+  const page = await getPageForTargetId({
+    cdpUrl: opts.cdpUrl,
+    targetId: opts.targetId,
+  });
+  ensurePageState(page);
+
+  const built = await buildDomSnapshotFromPage(page as Page, opts.options || {});
+
+  return {
+    snapshot: built.snapshot,
+    refs: built.refs,
+    stats: getRoleSnapshotStats(built.snapshot, built.refs),
+  };
+}
+
 export async function navigateViaPlaywright(opts: {
   cdpUrl: string;
   targetId?: string;

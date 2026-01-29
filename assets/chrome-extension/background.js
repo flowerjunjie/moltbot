@@ -211,6 +211,62 @@ async function attachTab(tabId, opts = {}) {
   await chrome.debugger.attach(debuggee, '1.3')
   await chrome.debugger.sendCommand(debuggee, 'Page.enable').catch(() => {})
 
+  // Detect and handle legacy Chinese encodings (GBK/GB2312/GB18030)
+  try {
+    const result = await chrome.debugger.sendCommand(debuggee, 'Runtime.evaluate', {
+      expression: `
+        (function() {
+          const charset = (document.characterSet || document.inputEncoding || 'UTF-8').toUpperCase();
+          const isLegacyChineseEncoding = charset === 'GBK' || charset === 'GB2312' || charset === 'GB18030';
+          if (!isLegacyChineseEncoding) return { handled: false };
+
+          console.log('[Browser Extension] Detected legacy encoding:', charset);
+          const errorLog = [];
+          const successLog = [];
+
+          (async function() {
+            try {
+              successLog.push('Starting encoding conversion from ' + charset + ' to UTF-8');
+              const response = await fetch(window.location.href, {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache' }
+              });
+              const buffer = await response.arrayBuffer();
+              const decoder = new TextDecoder(charset);
+              const html = decoder.decode(buffer);
+              successLog.push('Decoded ' + html.length + ' characters from ' + charset);
+              document.open();
+              document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">' +
+                document.head.innerHTML + '</head><body>' + document.body.innerHTML + '</body></html>');
+              document.close();
+              successLog.push('Document rewritten with UTF-8 encoding');
+            } catch (e) {
+              errorLog.push(e.toString());
+            }
+          })();
+
+          return {
+            handled: true,
+            charset: charset,
+            successLog: successLog,
+            errorLog: errorLog
+          };
+        })()
+      `,
+      returnByValue: true,
+      awaitPromise: true
+    });
+
+    const value = result?.result?.result?.value;
+    if (value?.handled) {
+      console.log('[Browser Extension] Encoding conversion for:', value.charset);
+      if (value.errorLog?.length) console.warn('[Browser Extension] Errors:', value.errorLog);
+      if (value.successLog?.length) console.log('[Browser Extension]', value.successLog.join(' | '));
+    }
+  } catch (err) {
+    console.warn('[Browser Extension] Encoding detection failed:', err?.message || err);
+  }
+
   const info = /** @type {any} */ (await chrome.debugger.sendCommand(debuggee, 'Target.getTargetInfo'))
   const targetInfo = info?.targetInfo
   const targetId = String(targetInfo?.targetId || '').trim()

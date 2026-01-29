@@ -412,9 +412,9 @@ export function createBrowserTool(opts?: {
         }
         case "snapshot": {
           const snapshotDefaults = loadConfig().browser?.snapshotDefaults;
-          const format =
-            params.snapshotFormat === "ai" || params.snapshotFormat === "aria"
-              ? (params.snapshotFormat as "ai" | "aria")
+          const format: "ai" | "aria" | "dom" =
+            params.snapshotFormat === "ai" || params.snapshotFormat === "aria" || params.snapshotFormat === "dom"
+              ? params.snapshotFormat
               : "ai";
           const mode =
             params.mode === "efficient"
@@ -445,21 +445,42 @@ export function createBrowserTool(opts?: {
                   : DEFAULT_AI_SNAPSHOT_MAX_CHARS
               : undefined;
           const interactive =
-            typeof params.interactive === "boolean" ? params.interactive : undefined;
-          const compact = typeof params.compact === "boolean" ? params.compact : undefined;
+            typeof params.interactive === "boolean" ? params.interactive : true;
+          const compact = typeof params.compact === "boolean" ? params.compact : true;
           const depth =
             typeof params.depth === "number" && Number.isFinite(params.depth)
               ? params.depth
-              : undefined;
+              : 5;
           const selector = typeof params.selector === "string" ? params.selector.trim() : undefined;
           const frame = typeof params.frame === "string" ? params.frame.trim() : undefined;
+
+          // Handle dom format separately
+          const snapshotFormat = format === "dom" ? "ai" : format;
+          if (format === "dom") {
+            if (proxyRequest) {
+              const result = await proxyRequest({
+                method: "GET",
+                path: "/domsnapshot",
+                profile,
+                query: {
+                  targetId,
+                  interactive,
+                  compact,
+                  depth,
+                },
+              });
+              return jsonResult(result);
+            }
+            throw new Error("dom format requires proxy mode");
+          }
+
           const snapshot = proxyRequest
             ? ((await proxyRequest({
                 method: "GET",
                 path: "/snapshot",
                 profile,
                 query: {
-                  format,
+                  format: snapshotFormat,
                   targetId,
                   limit,
                   ...(typeof resolvedMaxChars === "number" ? { maxChars: resolvedMaxChars } : {}),
@@ -474,7 +495,7 @@ export function createBrowserTool(opts?: {
                 },
               })) as Awaited<ReturnType<typeof browserSnapshot>>)
             : await browserSnapshot(baseUrl, {
-                format,
+                format: snapshotFormat,
                 targetId,
                 limit,
                 ...(typeof resolvedMaxChars === "number" ? { maxChars: resolvedMaxChars } : {}),
@@ -667,8 +688,8 @@ export function createBrowserTool(opts?: {
         }
         case "act": {
           const request = params.request as Record<string, unknown> | undefined;
-          if (!request || typeof request !== "object") {
-            throw new Error("request required");
+          if (!request) {
+            throw new Error("request is required for action=act");
           }
           try {
             const result = proxyRequest

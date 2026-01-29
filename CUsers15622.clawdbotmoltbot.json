@@ -1,0 +1,26 @@
+{
+  "gateway": {
+    "url": "ws://38.14.254.51:18789",
+    "mode": "client",
+    "auth": {
+      "token": "moltbot-cluster-2024"
+    }
+  },
+  "browser": {
+    "enabled": true,
+    "port": 18792
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "minimax": {
+        "baseUrl": "https://api.minimaxi.com/anthropic",
+        "apiKey": "sk-cp-cvEiSLgsK070H9seQfSeeqvpk4TB9swvRGoXbW_7NdDBIbn-uGiABy-1oMcZ0WPXQa57MwfhlH4iST7qjF5NrPX1U25Jk-9iy6pHQPceRonqePt1obtekdw",
+        "authHeader": true
+      }
+    }
+  },
+  "agents": {
+    "mode": "remote"
+  }
+}

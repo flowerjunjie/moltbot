@@ -1,0 +1,41 @@
+{
+  "sync": {
+    "enabled": true,
+    "mode": "redis",
+    "redis": {
+      "host": "38.14.254.51",
+      "port": 6379,
+      "password": "moltbot-redis-2024"
+    },
+    "dataTypes": {
+      "sessions": {
+        "enabled": true,
+        "syncInterval": 5000,
+        "conflictResolution": "last-write-wins"
+      },
+      "memory": {
+        "enabled": true,
+        "syncInterval": 10000,
+        "conflictResolution": "merge"
+      },
+      "credentials": {
+        "enabled": false,
+        "reason": "security"
+      },
+      "workspace": {
+        "enabled": true,
+        "paths": ["MEMORY.md", "memory/*.md"],
+        "syncInterval": 30000
+      }
+    },
+    "conflictResolution": {
+      "strategy": "timestamp",
+      "fallback": "manual"
+    },
+    "offline": {
+      "enabled": true,
+      "queueLimit": 100,
+      "syncOnReconnect": true
+    }
+  }
+}

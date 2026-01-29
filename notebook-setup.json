@@ -1,0 +1,35 @@
+{
+  "gateway": {
+    "mode": "local",
+    "bind": "lan",
+    "auth": {
+      "token": "moltbot-cluster-2024"
+    }
+  },
+  "browser": {
+    "enabled": true
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "minimax": {
+        "baseUrl": "https://api.minimaxi.com/anthropic",
+        "apiKey": "sk-cp-cvEiSLgsK070H9seQfSeeqvpk4TB9swvRGoXbW_7NdDBIbn-uGiABy-1oMcZ0WPXQa57MwfhlH4iST7qjF5NrPX1U25Jk-9iy6pHQPceRonqePt1obtekdw",
+        "authHeader": true,
+        "models": [
+          {
+            "id": "claude-3-5-sonnet-20241022",
+            "name": "Claude 3.5 Sonnet"
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "minimax/claude-3-5-sonnet-20241022"
+      }
+    }
+  }
+}
